@@ -1,0 +1,32 @@
+[project]
+name = "youtube-smart-transcriber"
+version = "0.1.0"
+description = "Telegram bot for AI-powered YouTube video & podcast summaries"
+requires-python = ">=3.13"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM", "TCH", "RUF"]
+ignore = ["A003"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["aiosqlite", "aiosqlite.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["youtube_transcript_api", "youtube_transcript_api.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

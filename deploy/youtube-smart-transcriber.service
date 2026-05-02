@@ -1,0 +1,17 @@
+[Unit]
+Description=YouTube Smart Transcriber Bot
+After=network.target
+
+[Service]
+Type=simple
+User=botuser
+WorkingDirectory=/opt/youtube-smart-transcriber
+EnvironmentFile=/opt/youtube-smart-transcriber/.env
+ExecStart=/opt/youtube-smart-transcriber/.venv/bin/python -m bot
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
