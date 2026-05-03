@@ -8,6 +8,7 @@ from aiogram.filters import Command, CommandStart
 from bot.db import get_db
 from bot.keyboards import confirm_delete_keyboard, start_keyboard
 from bot.services.quota import get_usage_summary
+from bot.services.summarizer import SummarizationError, format_summary, summarize_transcript
 from bot.services.transcript import (
     NoTranscriptAvailableError,
     ServiceBlockedError,
@@ -168,20 +169,18 @@ async def cb_try_example(callback: CallbackQuery) -> None:
 
     try:
         result = await fetch_youtube_transcript(_EXAMPLE_VIDEO_ID)
-        text = " ".join(s.text for s in result.segments)
-        if len(text) > 4000:
-            text = text[:4000] + "…"
-        mins, secs = divmod(result.duration_seconds, 60)
-        await status_msg.edit_text(
-            f"<b>Example transcript</b> ({mins}m {secs}s · {result.source})\n\n{text}",
-            parse_mode="HTML",
-        )
+        await status_msg.edit_text("🧠 Summarizing…")
+        summary = await summarize_transcript(result)
+        formatted = format_summary(summary, result.duration_seconds)
+        await status_msg.edit_text(formatted, parse_mode="HTML")
     except NoTranscriptAvailableError:
         await status_msg.edit_text("❌ This example video has no captions.")
     except VideoNotAvailableError:
         await status_msg.edit_text("❌ Example video unavailable.")
     except (ServiceBlockedError, TranscriptError) as e:
         await status_msg.edit_text(f"❌ Could not fetch transcript: {e}")
+    except SummarizationError as e:
+        await status_msg.edit_text(f"❌ Could not summarize: {e}")
 
 
 @router.callback_query(lambda c: c.data == "how_it_works")
