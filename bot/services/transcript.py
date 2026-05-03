@@ -49,17 +49,37 @@ class ServiceBlockedError(TranscriptError):
     pass
 
 
+def _poll_supadata_batch(client: object, job_id: str) -> object:
+    import time
+    from typing import Any
+
+    c: Any = client
+    for _ in range(30):  # up to 90 seconds
+        time.sleep(3)
+        batch = c.youtube.batch.get_batch_results(job_id)
+        if batch.status == "completed":
+            if batch.results and batch.results[0].transcript:
+                return batch.results[0].transcript
+            raise NoTranscriptAvailableError("Batch job completed but no transcript found")
+        if batch.status == "failed":
+            code = batch.results[0].error_code if batch.results else "unknown"
+            raise TranscriptError(f"Supadata batch job failed: {code}")
+    raise TranscriptError("Timed out waiting for Supadata to process the video")
+
+
 def _fetch_via_supadata(video_id: str) -> TranscriptResult:
+    from typing import Any
+
     from supadata import Supadata
     from supadata.errors import SupadataError
-    from supadata.types import Transcript, TranscriptChunk
+    from supadata.types import BatchJob, Transcript, TranscriptChunk
 
     s = get_settings()
     client = Supadata(api_key=s.supadata_api_key)
     url = f"https://www.youtube.com/watch?v={video_id}"
 
     try:
-        result = client.transcript(url=url, lang="en")
+        result: Any = client.transcript(url=url, lang="en")
     except SupadataError as e:
         code = e.error
         if code in ("transcript-unavailable", "no-transcript"):
@@ -68,8 +88,12 @@ def _fetch_via_supadata(video_id: str) -> TranscriptResult:
             raise VideoNotAvailableError(e.details) from e
         raise TranscriptError(str(e)) from e
 
+    # Supadata returns BatchJob for longer videos — poll until done
+    if isinstance(result, BatchJob):
+        result = _poll_supadata_batch(client, result.job_id)
+
     if not isinstance(result, Transcript):
-        raise TranscriptError("Unexpected async response from Supadata")
+        raise TranscriptError(f"Unexpected response type from Supadata: {type(result).__name__}")
 
     chunks: list[TranscriptChunk] = (
         result.content if isinstance(result.content, list) else []
