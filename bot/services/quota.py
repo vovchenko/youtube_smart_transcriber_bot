@@ -34,6 +34,25 @@ async def has_active_subscription(user_id: int) -> bool:
         return await cursor.fetchone() is not None
 
 
+async def get_summary_credits(user_id: int) -> int:
+    """Return the number of purchased single-summary credits."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            "SELECT summary_credits FROM users WHERE user_id = ?", (user_id,)
+        )
+        row = await cursor.fetchone()
+        return int(row[0]) if row else 0
+
+
+async def will_use_credit(user_id: int) -> bool:
+    """Return True if the next summary will consume a purchased credit, not free quota."""
+    if await has_active_subscription(user_id):
+        return False
+    settings = get_settings()
+    used = await get_monthly_usage_count(user_id)
+    return used >= settings.free_quota_per_month
+
+
 async def can_summarize(user_id: int) -> bool:
     """Return True if the user can request a summary."""
     if await has_active_subscription(user_id):
@@ -41,7 +60,10 @@ async def can_summarize(user_id: int) -> bool:
 
     settings = get_settings()
     used = await get_monthly_usage_count(user_id)
-    return used < settings.free_quota_per_month
+    if used < settings.free_quota_per_month:
+        return True
+
+    return await get_summary_credits(user_id) > 0
 
 
 async def get_usage_summary(user_id: int) -> str:

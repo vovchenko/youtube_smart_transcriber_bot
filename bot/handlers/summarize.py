@@ -5,8 +5,11 @@ from typing import TYPE_CHECKING
 import structlog
 from aiogram import F, Router
 
+from bot.config import get_settings
 from bot.db import get_db
-from bot.services.quota import can_summarize
+from bot.keyboards import payment_keyboard
+from bot.services.payments import deduct_summary_credit
+from bot.services.quota import can_summarize, will_use_credit
 from bot.services.summarizer import (
     SummarizationError,
     format_summary,
@@ -115,13 +118,15 @@ async def handle_text(message: Message, log: BoundLogger) -> None:
         return
 
     if not await can_summarize(user_id):
+        s = get_settings()
         await message.answer(
             "You've used all your free summaries this month.\n\n"
-            "Subscribe for 500⭐/month or pay 50⭐ per summary.\n"
-            "Use /usage to see your quota."
+            "Choose an option to continue:",
+            reply_markup=payment_keyboard(s.subscription_stars, s.single_summary_stars),
         )
         return
 
+    using_credit = await will_use_credit(user_id)
     status_msg = await message.answer("⏳ Fetching transcript…")
 
     transcript_result: TranscriptResult | None = None
@@ -148,6 +153,9 @@ async def handle_text(message: Message, log: BoundLogger) -> None:
         await log.awarning("summarization_error", video_id=video_id, error=str(e))
 
     await _log_usage(user_id, video_id, transcript_result, error_text)
+
+    if not error_text and using_credit:
+        await deduct_summary_credit(user_id)
 
     if error_text:
         await status_msg.edit_text(f"❌ {error_text}")

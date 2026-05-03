@@ -22,6 +22,25 @@ def start_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def payment_keyboard(subscription_stars: int, single_stars: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"Subscribe {subscription_stars}⭐/month",
+                    callback_data="buy_subscription",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"Single summary {single_stars}⭐",
+                    callback_data="buy_single",
+                ),
+            ],
+        ]
+    )
+
+
 def confirm_delete_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

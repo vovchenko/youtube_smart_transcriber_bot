@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN summary_credits INTEGER NOT NULL DEFAULT 0;

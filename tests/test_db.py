@@ -27,7 +27,7 @@ async def test_schema_version_recorded(
         "SELECT version FROM schema_version ORDER BY version"
     )
     versions = [row[0] for row in await cursor.fetchall()]
-    assert versions == [1]
+    assert versions == [1, 2]
 
 
 async def test_migrations_idempotent(db_path: str) -> None:
@@ -38,7 +38,7 @@ async def test_migrations_idempotent(db_path: str) -> None:
             "SELECT version FROM schema_version ORDER BY version"
         )
         versions = [row[0] for row in await cursor.fetchall()]
-        assert versions == [1]
+        assert versions == [1, 2]
     finally:
         await conn.close()
 
