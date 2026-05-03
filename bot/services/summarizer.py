@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import anthropic
+import structlog
 from anthropic.types import TextBlock
 
 from bot.config import get_settings
+
+log: structlog.stdlib.BoundLogger = structlog.get_logger()
 
 if TYPE_CHECKING:
     from bot.services.transcript import TranscriptResult
@@ -72,6 +76,18 @@ def format_summary(summary: Summary, duration_seconds: int) -> str:
     return "\n\n".join(parts)
 
 
+def _extract_json(raw: str) -> dict[str, Any]:
+    text = raw.strip()
+    # Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    text = text.strip()
+    parsed: Any = json.loads(text)
+    if not isinstance(parsed, dict):
+        raise TypeError(f"Expected JSON object, got {type(parsed).__name__}")
+    return parsed
+
+
 async def summarize_transcript(transcript: TranscriptResult) -> Summary:
     s = get_settings()
     if not s.anthropic_api_key:
@@ -82,23 +98,33 @@ async def summarize_transcript(transcript: TranscriptResult) -> Summary:
 
     try:
         message = await client.messages.create(
-            model="claude-haiku-4-5",
+            model="claude-haiku-4-5-20251001",
             max_tokens=2048,
-            temperature=0,
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": f"Transcript:\n\n{transcript_text}"}],
         )
     except anthropic.APIError as e:
         raise SummarizationError(f"Claude API error: {e}") from e
 
-    block = message.content[0]
-    if not isinstance(block, TextBlock):
-        raise SummarizationError("Unexpected response format from Claude")
+    # Find the first TextBlock (there may be thinking blocks before it)
+    raw = ""
+    for block in message.content:
+        if isinstance(block, TextBlock) and block.text:
+            raw = block.text
+            break
 
-    raw = block.text
+    if not raw:
+        await log.awarning(
+            "claude_empty_response",
+            stop_reason=message.stop_reason,
+            content_types=[type(b).__name__ for b in message.content],
+        )
+        raise SummarizationError("Claude returned an empty response")
+
     try:
-        data: dict[str, Any] = json.loads(raw)
-    except json.JSONDecodeError as e:
+        data: dict[str, Any] = _extract_json(raw)
+    except (json.JSONDecodeError, TypeError) as e:
+        await log.awarning("claude_json_parse_error", raw=raw[:500], error=str(e))
         raise SummarizationError(f"Could not parse Claude response as JSON: {e}") from e
 
     key_points = [
