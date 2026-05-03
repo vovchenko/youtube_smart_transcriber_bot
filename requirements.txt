@@ -5,5 +5,6 @@ pydantic>=2.10,<3
 structlog>=24.4,<25
 httpx>=0.28,<1
 youtube-transcript-api>=1.2,<2
+supadata>=1.0,<2
 anthropic>=0.43,<1
 openai>=1.59,<2
