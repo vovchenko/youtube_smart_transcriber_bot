@@ -53,17 +53,27 @@ def _poll_supadata_batch(client: object, job_id: str) -> object:
     import time
     from typing import Any
 
+    from supadata.errors import SupadataError
+    from supadata.types import Transcript
+
     c: Any = client
     for _ in range(30):  # up to 90 seconds
         time.sleep(3)
-        batch = c.youtube.batch.get_batch_results(job_id)
-        if batch.status == "completed":
-            if batch.results and batch.results[0].transcript:
-                return batch.results[0].transcript
-            raise NoTranscriptAvailableError("Batch job completed but no transcript found")
-        if batch.status == "failed":
-            code = batch.results[0].error_code if batch.results else "unknown"
-            raise TranscriptError(f"Supadata batch job failed: {code}")
+        try:
+            response: dict[str, Any] = c._request("GET", f"/transcript/{job_id}")
+        except SupadataError as e:
+            raise TranscriptError(f"Supadata polling error: {e}") from e
+
+        # Still queued — response contains job_id again
+        if "job_id" in response:
+            continue
+
+        # Completed — response is a transcript payload
+        if "content" in response:
+            return Transcript(**response)
+
+        raise TranscriptError(f"Unexpected polling response: {list(response.keys())}")
+
     raise TranscriptError("Timed out waiting for Supadata to process the video")
 
 
