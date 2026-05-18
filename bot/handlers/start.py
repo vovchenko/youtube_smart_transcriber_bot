@@ -171,7 +171,7 @@ async def cb_try_example(callback: CallbackQuery) -> None:
         result = await fetch_youtube_transcript(_EXAMPLE_VIDEO_ID)
         await status_msg.edit_text("🧠 Summarizing…")
         summary = await summarize_transcript(result)
-        formatted = format_summary(summary, result.duration_seconds)
+        formatted = format_summary(summary, result.duration_seconds, _EXAMPLE_VIDEO_ID)
         await status_msg.edit_text(formatted, parse_mode="HTML")
     except NoTranscriptAvailableError:
         await status_msg.edit_text("❌ This example video has no captions.")

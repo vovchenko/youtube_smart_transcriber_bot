@@ -57,13 +57,38 @@ def _format_transcript_for_claude(transcript: TranscriptResult) -> str:
     return "\n".join(lines)
 
 
-def format_summary(summary: Summary, duration_seconds: int) -> str:
+def _timestamp_to_seconds(timestamp: str) -> int | None:
+    """Convert MM:SS format to seconds, or return None if invalid."""
+    try:
+        parts = timestamp.split(":")
+        if len(parts) == 2:
+            mins, secs = int(parts[0]), int(parts[1])
+            return mins * 60 + secs
+        elif len(parts) == 3:
+            hrs, mins, secs = int(parts[0]), int(parts[1]), int(parts[2])
+            return hrs * 3600 + mins * 60 + secs
+        return None
+    except (ValueError, IndexError):
+        return None
+
+
+def format_summary(summary: Summary, duration_seconds: int, video_id: str = "") -> str:
     mins, secs = divmod(duration_seconds, 60)
     parts = [f"<b>TL;DR</b> ({mins}m {secs}s)\n{summary.tldr}"]
 
     if summary.key_points:
-        points = "\n".join(f"• {p}" for p in summary.key_points)
-        parts.append(f"<b>Key Points</b>\n{points}")
+        points = []
+        for p in summary.key_points:
+            if video_id and "[" in p and "]" in p:
+                timestamp = p.split("]")[0].replace("[", "").strip()
+                seconds = _timestamp_to_seconds(timestamp)
+                if seconds is not None:
+                    point_text = p.split("]", 1)[1].strip()
+                    url = f"https://youtu.be/{video_id}?t={seconds}"
+                    points.append(f"• <a href='{url}'>{timestamp}</a> {point_text}")
+                    continue
+            points.append(f"• {p}")
+        parts.append(f"<b>Key Points</b>\n" + "\n".join(points))
 
     if summary.quotes:
         quotes_text = "\n".join(f'"{q}"' for q in summary.quotes)

@@ -136,7 +136,7 @@ async def handle_text(message: Message, log: BoundLogger) -> None:
         transcript_result = await fetch_youtube_transcript(video_id)
         await status_msg.edit_text("🧠 Summarizing…")
         summary = await summarize_transcript(transcript_result)
-        formatted = format_summary(summary, transcript_result.duration_seconds)
+        formatted = format_summary(summary, transcript_result.duration_seconds, video_id)
         await _cache_summary(video_id, formatted)
         await status_msg.edit_text(formatted, parse_mode="HTML")
     except NoTranscriptAvailableError:
