@@ -64,8 +64,8 @@ def _poll_supadata_batch(client: object, job_id: str) -> object:
         except SupadataError as e:
             raise TranscriptError(f"Supadata polling error: {e}") from e
 
-        # Still queued — response contains job_id again
-        if "job_id" in response:
+        # Still processing — response contains job_id, status, or other in-progress markers
+        if "job_id" in response or "status" in response:
             continue
 
         # Completed — response is a transcript payload
