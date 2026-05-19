@@ -53,12 +53,16 @@ def _poll_supadata_batch(client: object, job_id: str) -> object:
     import time
     from typing import Any
 
+    import structlog
     from supadata.errors import SupadataError
     from supadata.types import Transcript
 
     c: Any = client
-    for _ in range(30):  # up to 90 seconds
-        time.sleep(3)
+    poll_log = structlog.get_logger()
+    poll_count = 0
+    for attempt in range(60):  # up to ~4 minutes (longer videos)
+        time.sleep(3 if attempt < 10 else 5)  # backoff: 3s for first 10, then 5s
+        poll_count += 1
         try:
             response: dict[str, Any] = c._request("GET", f"/transcript/{job_id}")
         except SupadataError as e:
@@ -66,15 +70,18 @@ def _poll_supadata_batch(client: object, job_id: str) -> object:
 
         # Still processing — response contains job_id, status, or other in-progress markers
         if "job_id" in response or "status" in response:
+            status_val = response.get("status", "queued")
+            poll_log.debug("supadata_polling", job_id=job_id, status=status_val, attempt=poll_count)
             continue
 
         # Completed — response is a transcript payload
         if "content" in response:
+            poll_log.debug("supadata_complete", job_id=job_id, polls=poll_count)
             return Transcript(**response)
 
         raise TranscriptError(f"Unexpected polling response: {list(response.keys())}")
 
-    raise TranscriptError("Timed out waiting for Supadata to process the video")
+    raise TranscriptError(f"Timed out waiting for Supadata to process the video after {poll_count} polls")
 
 
 def _fetch_via_supadata(video_id: str) -> TranscriptResult:
