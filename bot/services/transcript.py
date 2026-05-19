@@ -68,6 +68,10 @@ def _poll_supadata_batch(client: object, job_id: str) -> object:
         except SupadataError as e:
             raise TranscriptError(f"Supadata polling error: {e}") from e
 
+        # Check for error in response
+        if "error" in response:
+            raise TranscriptError(f"Supadata error: {response.get('error')}")
+
         # Still processing — response contains job_id, status, or other in-progress markers
         if "job_id" in response or "status" in response:
             status_val = response.get("status", "queued")
@@ -81,7 +85,8 @@ def _poll_supadata_batch(client: object, job_id: str) -> object:
 
         raise TranscriptError(f"Unexpected polling response: {list(response.keys())}")
 
-    raise TranscriptError(f"Timed out waiting for Supadata to process the video after {poll_count} polls")
+    poll_log.warning("supadata_timeout", job_id=job_id, polls=poll_count)
+    raise TranscriptError(f"Supadata timed out after {poll_count} polls")
 
 
 def _fetch_via_supadata(video_id: str) -> TranscriptResult:
@@ -194,9 +199,16 @@ def _fetch_via_ytapi(video_id: str) -> TranscriptResult:
 
 
 def _fetch_sync(video_id: str) -> TranscriptResult:
+    import structlog
+
     s = get_settings()
+    log = structlog.get_logger()
     if s.supadata_api_key:
-        return _fetch_via_supadata(video_id)
+        try:
+            return _fetch_via_supadata(video_id)
+        except TranscriptError as e:
+            log.warning("supadata_failed", video_id=video_id, error=str(e))
+            log.info("falling_back_to_youtube_api", video_id=video_id)
     return _fetch_via_ytapi(video_id)
 
 
